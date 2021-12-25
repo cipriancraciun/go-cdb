@@ -73,13 +73,17 @@ func NewWriter(writer io.WriteSeeker, hash func([]byte) uint32) (*Writer, error)
 // Put adds a key/value pair to the database. If the amount of data written
 // would exceed the limit, Put returns ErrTooMuchData.
 func (cdb *Writer) Put(key, value []byte) error {
+	hash := cdb.hash(key)
+	return cdb.PutWithHash(key, hash, value)
+}
+
+func (cdb *Writer) PutWithHash(key []byte, hash uint32, value []byte) error {
 	entrySize := int64(8 + len(key) + len(value))
 	if (cdb.bufferedOffset + entrySize + cdb.estimatedFooterSize + 16) > math.MaxUint32 {
 		return ErrTooMuchData
 	}
 
 	// Record the entry in the hash table, to be written out at the end.
-	hash := cdb.hash(key)
 	table := hash & 0xff
 
 	entry := entry{hash: hash, offset: uint32(cdb.bufferedOffset)}
