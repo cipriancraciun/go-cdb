@@ -49,7 +49,7 @@ func Open(path string) (*CDB, error) {
 // passed to New, or the database will return incorrect results.
 func New(reader io.ReaderAt, hash func([]byte) uint32) (*CDB, error) {
 	if hash == nil {
-		hash = cdbHash
+		hash = CDBHash
 	}
 
 	cdb := &CDB{reader: reader, hash: hash}

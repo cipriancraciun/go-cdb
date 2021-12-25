@@ -59,7 +59,7 @@ func NewWriter(writer io.WriteSeeker, hash func([]byte) uint32) (*Writer, error)
 	}
 
 	if hash == nil {
-		hash = cdbHash
+		hash = CDBHash
 	}
 
 	return &Writer{
