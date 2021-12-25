@@ -21,6 +21,7 @@ type index [256]table
 // create a database, use Writer.
 type CDB struct {
 	reader io.ReaderAt
+	readerBytes []byte
 	hash   func([]byte) uint32
 	index  index
 }
@@ -48,11 +49,25 @@ func Open(path string) (*CDB, error) {
 // was created with a particular hash function, that same hash function must be
 // passed to New, or the database will return incorrect results.
 func New(reader io.ReaderAt, hash func([]byte) uint32) (*CDB, error) {
+	return NewFromReaderWithHasher(reader, hash)
+}
+
+func NewFromReaderWithHasher(reader io.ReaderAt, hash func ([]byte) uint32) (*CDB, error) {
+	cdb := &CDB{reader: reader}
+	return cdb.initialize(hash)
+}
+
+func NewFromBufferWithHasher(buffer []byte, hash func ([]byte) uint32) (*CDB, error) {
+	cdb := &CDB{readerBytes: buffer}
+	return cdb.initialize(hash)
+}
+
+func (cdb *CDB) initialize (hash func ([]byte) uint32) (*CDB, error) {
 	if hash == nil {
 		hash = CDBHash
 	}
 
-	cdb := &CDB{reader: reader, hash: hash}
+	cdb.hash = hash
 	err := cdb.readIndex()
 	if err != nil {
 		return nil, err
@@ -80,7 +95,7 @@ func (cdb *CDB) GetWithHash(key []byte, hash uint32) ([]byte, error) {
 
 	for {
 		slotOffset := table.offset + (8 * slot)
-		slotHash, offset, err := readTuple(cdb.reader, slotOffset)
+		slotHash, offset, err := cdb.readTuple(slotOffset)
 		if err != nil {
 			return nil, err
 		}
@@ -108,6 +123,9 @@ func (cdb *CDB) GetWithHash(key []byte, hash uint32) ([]byte, error) {
 
 // Close closes the database to further reads.
 func (cdb *CDB) Close() error {
+	if cdb.reader == nil {
+		return nil
+	}
 	if closer, ok := cdb.reader.(io.Closer); ok {
 		return closer.Close()
 	} else {
@@ -116,8 +134,7 @@ func (cdb *CDB) Close() error {
 }
 
 func (cdb *CDB) readIndex() error {
-	buf := make([]byte, indexSize)
-	_, err := cdb.reader.ReadAt(buf, 0)
+	buf, err := cdb.readAt(0, indexSize)
 	if err != nil {
 		return err
 	}
@@ -134,7 +151,7 @@ func (cdb *CDB) readIndex() error {
 }
 
 func (cdb *CDB) getValueAt(offset uint32, expectedKey []byte) ([]byte, error) {
-	keyLength, valueLength, err := readTuple(cdb.reader, offset)
+	keyLength, valueLength, err := cdb.readTuple(offset)
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +161,8 @@ func (cdb *CDB) getValueAt(offset uint32, expectedKey []byte) ([]byte, error) {
 		return nil, nil
 	}
 
-	buf := make([]byte, keyLength+valueLength)
-	_, err = cdb.reader.ReadAt(buf, int64(offset+8))
+	var buf []byte
+	buf, err = cdb.readAt(offset+8, keyLength+valueLength)
 	if err != nil {
 		return nil, err
 	}
