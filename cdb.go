@@ -22,6 +22,7 @@ type index [256]table
 type CDB struct {
 	reader io.ReaderAt
 	readerBytes []byte
+	readerCloser io.Closer
 	hash   func([]byte) uint32
 	index  index
 }
@@ -54,6 +55,9 @@ func New(reader io.ReaderAt, hash func([]byte) uint32) (*CDB, error) {
 
 func NewFromReaderWithHasher(reader io.ReaderAt, hash func ([]byte) uint32) (*CDB, error) {
 	cdb := &CDB{reader: reader}
+	if closer, ok := cdb.reader.(io.Closer); ok {
+		cdb.readerCloser = closer
+	}
 	return cdb.initialize(hash)
 }
 
@@ -123,14 +127,14 @@ func (cdb *CDB) GetWithHash(key []byte, hash uint32) ([]byte, error) {
 
 // Close closes the database to further reads.
 func (cdb *CDB) Close() error {
-	if cdb.reader == nil {
-		return nil
+	var err error
+	if cdb.readerCloser != nil {
+		err = cdb.readerCloser.Close()
 	}
-	if closer, ok := cdb.reader.(io.Closer); ok {
-		return closer.Close()
-	} else {
-		return nil
-	}
+	cdb.reader = nil
+	cdb.readerBytes = nil
+	cdb.readerCloser = nil
+	return err
 }
 
 func (cdb *CDB) readIndex() error {
