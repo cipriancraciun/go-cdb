@@ -82,8 +82,9 @@ func (cdb *CDB) initialize (hash func ([]byte) uint32) (*CDB, error) {
 
 // Get returns the value for a given key, or nil if it can't be found.
 func (cdb *CDB) Get(key []byte) ([]byte, error) {
-	hash := cdb.hash(key)
-	return cdb.GetWithHash(key, hash)
+	key_0 := *NoEscapeBytes(&key)
+	hash := cdb.hash(key_0)
+	return cdb.GetWithHash(key_0, hash)
 }
 
 func (cdb *CDB) GetWithHash(key []byte, hash uint32) ([]byte, error) {
